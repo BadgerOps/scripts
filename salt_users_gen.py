@@ -56,7 +56,7 @@ class YamlUsergen(object):
         for user in self.users:
             try:
                 pw = pwd.getpwnam(user)
-                self.combined[user] = {'uid': pw.pw_uid, 'fullname': pw.pw_gecos, 'ssh_keys': self.userkeys[user] }
+                self.combined[user] = {'uid': pw.pw_uid, 'fullname': pw.pw_gecos, 'ssh_auth_file': self.userkeys[user] }
             except Exception as e:
                 print('couldn\'t set UID/fullname for {} error: {}'.format(user, e))
                 pass
