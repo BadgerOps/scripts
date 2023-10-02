@@ -2,6 +2,8 @@
 #
 # This script checks to see if a port is open, if so we exit 0, if not, exit 1.
 # We'll retry 5 times on fail to mitigate false alerts
+# The purpose is to be a super lightweight "is this port open" command that
+# can be ran on any linux box (no dep on netcat) against any host
 
 if [ $# -lt 2 ]
 then
