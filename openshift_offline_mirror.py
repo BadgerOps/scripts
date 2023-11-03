@@ -18,7 +18,6 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(mes
 parser = argparse.ArgumentParser(description='Export images and generate mapping and ImageContentSourcePolicy for offline repository.')
 parser.add_argument('-f', '--file', type=str, required=True, help='File with image mappings')
 parser.add_argument('--authfile', type=str, required=False, help='Path to the authentication file for registry')
-parser.add_argument('--remove-signatures', action='store_true', help='Remove signatures from the images during copy')
 args = parser.parse_args()
 
 # Load the image mappings from the file
