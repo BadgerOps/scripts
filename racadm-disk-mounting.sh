@@ -55,6 +55,9 @@ restart_hosts() {
     done < "$input_file"
 }
 
+print_help(){
+  echo "Usage: $0 [-h host] [-i host_file] [-u username] [-p password] [-f iso path] [--debug] [--restart-hosts]"
+}
 # Main script
 set -e  # Exit on error
 
@@ -97,6 +100,10 @@ while [[ $# -gt 0 ]]; do
             restart_hosts_flag=true
             shift
             ;;
+        -h|--help)
+            print_help
+            exit 0
+            ;;
         *)
             echo "Usage: $0 [-h host] [-i host_file] [-u username] [-p password] [-f iso path] [--debug] [--restart-hosts]"
             exit 1
@@ -107,6 +114,13 @@ done
 # Enable debug mode if specified
 if [ "$debug" = true ]; then
     set -x
+fi
+
+# Print help if no args
+if [ "$#" -eq 0 ]
+then
+  print_help
+  exit 0
 fi
 
 # Check if both single_host and hosts_file options are provided
