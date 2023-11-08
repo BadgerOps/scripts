@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # For a single host
-# ./racadm_script.sh -h <HOST_IP_OR_HOSTNAME> -u <USERNAME> -p <PASSWORD> [--debug]
+# ./racadm_script.sh -h <HOST_IP_OR_HOSTNAME> -u <USERNAME> -p <PASSWORD> -f <ISO_PATH> [--debug]
 
 # For multiple hosts from a file
-# ./racadm_script.sh -i hosts.txt -u <USERNAME> -p <PASSWORD> [--debug] [--restart-hosts]
+# ./racadm_script.sh -i hosts.txt -u <USERNAME> -p <PASSWORD>  -f <ISO_PATH> [--debug] [--restart-hosts]
 
 
 
@@ -14,7 +14,7 @@ unmount_iso() {
     local host="$2"
     local username="$3"
     echo "Unmounting the old ISO on host $host..."
-    racadm -r "$host" -u "$username" -p "$password" remoteimage -o delete -l 1
+    racadm -r "$host" -u "$username" -p "$password" remoteimage -d
     echo "Old ISO unmounted on host $host."
 }
 
@@ -25,7 +25,12 @@ mount_iso() {
     local host="$3"
     local username="$4"
     echo "Mounting a new ISO file from $iso_path on host $host..."
-    racadm -r "$host" -u "$username" -p "$password" remoteimage -o insert -t iso -l 1 -f "$iso_path"
+    racadm -r "$host" -u "$username" -p "$password" remoteimage -c -l "$iso_path"
+    sleep 2
+    racadm -r "$host" -u "$username" -p "$password" set iDRAC.VirtualMedia.BootOnce 1
+    sleep 2
+    racadm -r "$host" -u "$username" -p "$password" set iDrac.ServerBoot.FirstBootDevice VCD-DVD
+    sleep 2
     echo "New ISO file mounted from $iso_path on host $host."
 }
 
@@ -50,6 +55,9 @@ restart_hosts() {
     done < "$input_file"
 }
 
+print_help(){
+  echo "Usage: $0 [-h host] [-i host_file] [-u username] [-p password] [-f iso path] [--debug] [--restart-hosts]"
+}
 # Main script
 set -e  # Exit on error
 
@@ -59,6 +67,7 @@ single_host=""
 hosts_file=""
 username=""
 password=""
+iso_path=""
 
 # Parse command line options
 while [[ $# -gt 0 ]]; do
@@ -79,6 +88,10 @@ while [[ $# -gt 0 ]]; do
             password="$2"
             shift 2
             ;;
+        -f|--filepath)
+            iso_path="$2"
+            shift 2
+            ;;
         --debug)
             debug=true
             shift
@@ -87,8 +100,12 @@ while [[ $# -gt 0 ]]; do
             restart_hosts_flag=true
             shift
             ;;
+        -h|--help)
+            print_help
+            exit 0
+            ;;
         *)
-            echo "Usage: $0 [-h host] [-i input_file] [-u username] [-p password] [--debug] [--restart-hosts]"
+            echo "Usage: $0 [-h host] [-i host_file] [-u username] [-p password] [-f iso path] [--debug] [--restart-hosts]"
             exit 1
             ;;
     esac
@@ -97,6 +114,13 @@ done
 # Enable debug mode if specified
 if [ "$debug" = true ]; then
     set -x
+fi
+
+# Print help if no args
+if [ "$#" -eq 0 ]
+then
+  print_help
+  exit 0
 fi
 
 # Check if both single_host and hosts_file options are provided
@@ -117,13 +141,18 @@ if [ -n "$hosts_file" ] && [ ! -f "$hosts_file" ]; then
     exit 1
 fi
 
+# Check if password is set, otherwise prompt for it
+if [ -z ${password+x} ]; then
+  echo "Please enter Password: "
+  read -s password
+  echo ""
 # Process single host or hosts from the input file
 if [ -n "$single_host" ]; then
     # Unmount the old ISO for the single host
     unmount_iso "$password" "$single_host" "$username"
 
     # Mount the new ISO for the single host
-    mount_iso "$password" "$new_iso_path" "$single_host" "$username"
+    mount_iso "$password" "$iso_path" "$single_host" "$username"
 else
     # Read host IPs or hostnames from the input file and process each host
     while IFS= read -r host; do
@@ -131,7 +160,7 @@ else
         unmount_iso "$password" "$host" "$username"
 
         # Mount the new ISO
-        mount_iso "$password" "$new_iso_path" "$host" "$username"
+        mount_iso "$password" "$iso_path" "$host" "$username"
     done < "$hosts_file"
 
     # Optionally restart the host machines
