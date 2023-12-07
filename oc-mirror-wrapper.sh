@@ -23,7 +23,7 @@ DESTINATION_DIR="/var/quay/oc-mirror"
 LOG_FILE="/var/quay/logs/$(date +%Y-%m-%d).log"
 
 # Parse command-line arguments
-while getopts 'c:d:l:' flag; do
+while getopts 'c:d:l' flag; do
   case "${flag}" in
     c) CONFIG_FILE="${OPTARG}" ;;
     d) DESTINATION_DIR="${OPTARG}" ;;
