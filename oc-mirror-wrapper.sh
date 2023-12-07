@@ -1,9 +1,21 @@
 #!/bin/bash
 
-# Sometimes, in a throttled/break & inspect environment oc-mirror will not recover from RST
+# Sometimes, in a throttled/break & inspect environment oc-mirror will not recover from RST, or we'll get a timeout
 # It will fail with a 401 unauthorized and exit 1
 # So, lets run this in a loop and re-try when that happens
 
+# Just use the script name for lock file
+script_name=$(basename "$0")
+lock_file="/var/tmp/${script_name}.lock"
+
+# Check if the script is already running
+if [ -f "$lock_file" ]; then
+    echo "Another instance of the script is running. Exiting."
+    exit 1
+fi
+
+# Create lock file
+touch "$lock_file"
 
 # Default values, can override with CLI args if desired
 CONFIG_FILE="/var/quay/imageset.yaml"
@@ -56,6 +68,9 @@ total_duration=$((end_time - start_time))
 
 echo "oc-mirror script ended at $(date)" >> "${LOG_FILE}"
 echo "Total time taken: $total_duration seconds." >> "${LOG_FILE}"
+
+# Finally, remove lock file
+rm -f "$lock_file"
 
 if [ $status -ne 0 ]; then
   echo "oc-mirror failed after $max_attempts attempts." >> "${LOG_FILE}"
