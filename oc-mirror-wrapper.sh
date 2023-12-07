@@ -20,7 +20,7 @@ touch "$lock_file"
 # Default values, can override with CLI args if desired
 CONFIG_FILE="/var/quay/imageset.yaml"
 DESTINATION_DIR="/var/quay/oc-mirror"
-LOG_FILE="/var/quay/logs/$(date +%Y-%m-%d).log"
+LOG_FILE="/var/quay/logs/$(date +%Y-%m-%d-%H_%M).log"
 
 # Parse command-line arguments
 while getopts 'c:d:l' flag; do
