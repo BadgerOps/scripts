@@ -1,6 +1,10 @@
 #!/usr/bin/bash
+#
+# Sometimes, in a throttled/break & inspect environment oc-mirror will not recover from RST or timeout
+# It will fail with a 401 unauthorized and exit 1
+# So, lets run this in a loop and re-try when that happens
 
-# set umask to 0022
+# First, set umask to 0022 to resolve the issues annotated in https://github.com/openshift/oc-mirror/issues/802
 umask 0022
 
 # Default values
