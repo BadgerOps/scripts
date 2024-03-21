@@ -1,60 +1,56 @@
-#!/bin/bash
+#!/usr/bin/bash
 #
 # Sometimes, in a throttled/break & inspect environment oc-mirror will not recover from RST or timeout
 # It will fail with a 401 unauthorized and exit 1
 # So, lets run this in a loop and re-try when that happens
 
+# First, set umask to 0022 to resolve the issues annotated in https://github.com/openshift/oc-mirror/issues/802
+umask 0022
+
 # Default values
-ROOT_DIRECTORY="/var/oc-mirror" # Set to your oc-mirror root directory
-CONFIG_FILE="${ROOT_DIRECTORY}/imageset.yaml"
-DESTINATION_DIR="${ROOT_DIRECTORY}/oc-mirror"
-LOG_FILE="${ROOT_DIRECTORY}/logs/$(date +%Y-%m-%d).log"
-DEBUG=false
-
-print_help(){
-  echo "Usage: $0 [-c config file] [-d destination directory] [-l log file] [--debug]"
-}
-# Main script
-set -e  # Exit on error
-
-# Parse command line options
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-        -c)
-            CONFIG_FILE="$2"
-            shift 2
-            ;;
-        -d)
-            DESTINATION_DIR="$2"
-            shift 2
-            ;;
-        -l)
-            LOG_FILE="$2"
-            shift 2
-            ;;
-        --debug)
-            DEBUG=true
-            shift
-            ;;
-        -h|--help)
-            print_help
-            exit 0
-            ;;
-        *)
-            print_help
-            exit 1
-            ;;
-    esac
+OC_MIRROR_PATH="/usr/bin/oc-mirror" # override if you have a specific OC Mirror version to use
+CONFIG_FILE=""
+DESTINATION_DIR=""
+LOG_DIR="/var/quay/logs/"
+# Parse command-line arguments
+while getopts 'c:d:l' flag; do
+  case "${flag}" in
+    c) CONFIG_FILE="${OPTARG}" ;;
+    d) DESTINATION_DIR="${OPTARG}" ;;
+    l) LOG_DIR="${OPTARG}" ;;
+    --ocpath) OC_MIRROR_PATH="${OPTARG}" ;;
+    --debug) DEBUG=true ;;
+    *) echo "Usage: $0 [-c CONFIG_FILE] [-d DESTINATION_DIR] [-l LOG_DIR] [--debug turns on debug] [ --ocpath /path/to/oc-mirror ]" >&2
+       exit 1 ;;
+  esac
 done
 
-# Set up lock file based off script name
+# turn on -x if we're debuggin'
+if [ "$DEBUG" = true ]; then
+  set -x
+fi
+
+if [ -z $CONFIG_FILE ]; then
+  echo "Please set -c or \$CONFIG_FILE"
+  exit 1
+fi
+
+if [ -z $DESTINATION_DIR ]; then
+  echo "Please set -d or \$DESTINATION_DIR"
+  exit 1
+fi
+
+# re-set log dir:
+LOG_DIR="${DESTINATION_DIR}/logs/$(date +%Y-%m-%d-%H_%M)"
+mkdir -p ${DESTINATION_DIR}logs
+# Script name for lock file
 script_name=$(basename "$0")
-lock_file="/var/tmp/${script_name}.lock"
+lock_file="${DESTINATION_DIR}/${script_name}.lock"
 
 # Check if the script is already running
 if [ -f "$lock_file" ]; then
     echo "Another instance of the script is running as of $(date +%Y-%m-%d-%H_%M). Exiting."
-    exit 0
+    exit 1
 else
   echo "Starting oc-mirror-wrapper script at $(date +%Y-%m-%d-%H_%M)"
 fi
@@ -62,41 +58,36 @@ fi
 # Create lock file
 touch "$lock_file"
 
-# Enable debug mode if specified
-if [ "$DEBUG" = true ]; then
-    OC_MIRROR_DEBUG="-v 9"
-    set -x
-fi
-
-# Start time and datestamp
-start_time=$(date +%s)
-echo "oc-mirror script started at $(date)" >> "${LOG_FILE}"
-
 # Function to run oc-mirror and check its exit status
 run_oc_mirror() {
   if [ "$DEBUG" = true ]; then
-    /usr/local/bin/oc-mirror ${OC_MIRROR_DEBUG} --config "${CONFIG_FILE}" file://"${DESTINATION_DIR}" >> "${LOG_FILE}" 2>&1
+    ${OC_MIRROR_PATH} -v 9 --skip-missing --continue-on-error --config "${CONFIG_FILE}" file://"${DESTINATION_DIR}" >> "${LOG_DIR}" 2>&1
     return $?
   else
-    /usr/local/bin/oc-mirror --config "${CONFIG_FILE}" file://"${DESTINATION_DIR}" >> "${LOG_FILE}" 2>&1
+    echo "starting mirror without verbose logging to ${LOG_DIR}"
+    ${OC_MIRROR_PATH} --skip-missing --continue-on-error --config "${CONFIG_FILE}" file://"${DESTINATION_DIR}" >> "${LOG_DIR}" 2>&1
     return $?
   fi
 }
+
+# Start time and datestamp
+start_time=$(date +%s)
+echo "oc-mirror script started at $(date)" >> "${LOG_DIR}"
 
 # Attempt to run oc-mirror and retry if it fails
 max_attempts=10
 attempt=1
 
 while [ $attempt -le $max_attempts ]; do
-  echo "Attempt $attempt of $max_attempts: Running oc-mirror..." >> "${LOG_FILE}"
+  echo "Attempt $attempt of $max_attempts: Running oc-mirror..." >> "${LOG_DIR}"
   run_oc_mirror
   status=$?
 
   if [ $status -eq 0 ]; then
-    echo "oc-mirror completed successfully." >> "${LOG_FILE}"
+    echo "oc-mirror completed successfully." >> "${LOG_DIR}"
     break
   else
-    echo "oc-mirror failed with status $status. Retrying..." >> "${LOG_FILE}"
+    echo "oc-mirror failed with status $status. Retrying..." >> "${LOG_DIR}"
     ((attempt++))
     sleep 60 # Wait for 10 seconds before retrying
   fi
@@ -106,11 +97,13 @@ done
 end_time=$(date +%s)
 total_duration=$((end_time - start_time))
 
-echo "oc-mirror script ended at $(date)" >> "${LOG_FILE}"
-echo "Total time taken: $total_duration seconds." >> "${LOG_FILE}"
+echo "oc-mirror script ended at $(date)" >> "${LOG_DIR}"
+echo "Total time taken: $total_duration seconds." >> "${LOG_DIR}"
+
+rm -f "$lock_file"
 
 if [ $status -ne 0 ]; then
-  echo "oc-mirror failed after $max_attempts attempts." >> "${LOG_FILE}"
+  echo "oc-mirror failed after $max_attempts attempts." >> "${LOG_DIR}"
   exit $status
 fi
 
