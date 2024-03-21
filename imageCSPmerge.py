@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Found.... somewhere.
+# Found... somewhere.
 
 # usage
 # ./imageCSPmerge.py $(find . -name imageContentSourcePolicy.yaml)
